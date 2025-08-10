@@ -26,25 +26,31 @@ const RadiusLine: React.FC<{
   theme: any;
 }> = ({ continuousTime, theme }) => {
   
-  const AnimatedSvg = Animated.createAnimatedComponent(Svg);
+  // Track cumulative rotation to avoid wraparound jumps
+  const cumulativeRotation = useSharedValue(0);
+  const lastTime = useSharedValue(0);
   
-  const animatedProps = useAnimatedStyle(() => {
-    // Calculate the angle for the current continuous time (in degrees)
-    const angleDegrees = continuousTime.value * 6 - 90; // -90 to start at 12 o'clock
-    
-    // Calculate the end position of the line
-    const angleRadians = (angleDegrees * Math.PI) / 180;
-    const endX = CENTER_X + RADIUS * Math.cos(angleRadians);
-    const endY = CENTER_Y + RADIUS * Math.sin(angleRadians);
-    
-    return {
-      // No transform needed - we'll calculate line positions directly
-    };
-  });
+  const AnimatedSvg = Animated.createAnimatedComponent(Svg);
 
-  // Calculate current line positions for SVG
+  // Calculate smooth continuous angle without wraparound issues
   const currentAngleRadians = useDerivedValue(() => {
-    return ((continuousTime.value * 6 - 90) * Math.PI) / 180;
+    const currentTime = continuousTime.value;
+    const timeDiff = currentTime - lastTime.value;
+    
+    // Handle wraparound: if time jumps backwards significantly, we wrapped around
+    if (timeDiff < -30) {
+      // We wrapped from 59.x to 0.x, add full rotation to maintain continuity
+      cumulativeRotation.value += 360;
+    } else if (timeDiff > 30) {
+      // We jumped forward significantly (shouldn't happen but safety check)
+      cumulativeRotation.value -= 360;
+    }
+    
+    lastTime.value = currentTime;
+    
+    // Calculate angle with cumulative rotation for smooth wraparound
+    const totalDegrees = (currentTime * 6 - 90) + cumulativeRotation.value;
+    return (totalDegrees * Math.PI) / 180;
   });
 
   const AnimatedLine = Animated.createAnimatedComponent(Line);
@@ -90,23 +96,33 @@ const SecondNumber: React.FC<{
   theme: any; 
 }> = ({ second, continuousTime, x, y, theme }) => {
   
-  // Create ultra-smooth animated styles with better interpolation
+  // Ultra-fluid animated styles with advanced interpolation
   const animatedStyle = useAnimatedStyle(() => {
-    // Calculate distance from current continuous time
-    const diff = Math.abs(continuousTime.value - second);
-    const circularDiff = Math.min(diff, 60 - diff); // Handle wrap-around
+    // Calculate distance from current continuous time with sub-millisecond precision
+    const rawDiff = Math.abs(continuousTime.value - second);
+    const circularDiff = Math.min(rawDiff, 60 - rawDiff); // Handle wrap-around smoothly
     
-    // Smaller base scale for inactive seconds to prevent overlap
-    let scale = 0.6; // Much smaller inactive seconds
-    let opacity = 0.15; // Lower base opacity
+    // Base values for inactive seconds
+    let scale = 0.6;
+    let opacity = 0.15;
     
-    if (circularDiff <= 2.0) {
-      // Smoother, wider influence zone with exponential easing
-      const normalizedDistance = circularDiff / 2.0;
-      const easedProximity = 1 - Math.pow(normalizedDistance, 0.5); // Smooth exponential curve
+    if (circularDiff <= 4.0) { // Much wider influence zone - affects ~8 seconds total
+      // Multi-stage easing for natural motion feel with extended range
+      const normalizedDistance = circularDiff / 4.0;
       
-      scale = 0.6 + easedProximity * 1.0; // Scale from 0.6 to 1.6
-      opacity = 0.15 + easedProximity * 0.85; // Opacity from 0.15 to 1.0
+      // Combine multiple easing functions for ultra-smooth transitions across wider range
+      const ease1 = 1 - Math.pow(normalizedDistance, 0.4); // Gentler power curve for wider spread
+      const ease2 = Math.sin((1 - normalizedDistance) * Math.PI * 0.5); // Sine wave smoothness
+      const ease3 = 1 - normalizedDistance * normalizedDistance; // Quadratic falloff
+      const ease4 = Math.cos(normalizedDistance * Math.PI * 0.5); // Additional cosine smoothness
+      
+      // Blend multiple easing curves with wider influence
+      const blendedProximity = (ease1 * 0.3 + ease2 * 0.3 + ease3 * 0.2 + ease4 * 0.2);
+      
+      // Apply ultra-smooth scaling with gentler transitions for wider effect
+      const scaleFactor = blendedProximity * blendedProximity * 0.8; // Slightly reduced intensity for wider spread
+      scale = 0.6 + scaleFactor;
+      opacity = 0.15 + blendedProximity * 0.75; // Gentler opacity increase for wider visibility
     }
     
     return {
@@ -119,25 +135,32 @@ const SecondNumber: React.FC<{
     };
   });
 
-  // Ultra-smooth color interpolation based on continuous proximity
+  // Hyper-smooth color interpolation with advanced blending
   const textAnimatedStyle = useAnimatedStyle(() => {
-    const diff = Math.abs(continuousTime.value - second);
-    const circularDiff = Math.min(diff, 60 - diff);
+    const rawDiff = Math.abs(continuousTime.value - second);
+    const circularDiff = Math.min(rawDiff, 60 - rawDiff);
     
-    // Create smooth color interpolation based on distance
+    // Multi-layered color interpolation for maximum smoothness
     let interpolationProgress = 0;
     
-    if (circularDiff <= 2.0) {
-      // Normalize distance to 0-1 range, with exponential easing for smoothness
-      const normalizedDistance = circularDiff / 2.0;
-      interpolationProgress = 1 - Math.pow(normalizedDistance, 0.3); // Smooth exponential curve
+    if (circularDiff <= 4.0) { // Match the wider influence zone for consistent highlighting
+      const normalizedDistance = circularDiff / 4.0;
+      
+      // Quadruple-blended easing for ultra-wide color transitions
+      const colorEase1 = 1 - Math.pow(normalizedDistance, 0.3); // Gentler power curve for wider spread
+      const colorEase2 = Math.cos(normalizedDistance * Math.PI * 0.5); // Cosine smoothness
+      const colorEase3 = 1 - normalizedDistance * normalizedDistance * normalizedDistance; // Cubic falloff
+      const colorEase4 = Math.sin((1 - normalizedDistance) * Math.PI * 0.5); // Additional sine smoothness
+      
+      // Blend easing curves for ultra-natural wide color transitions
+      interpolationProgress = (colorEase1 * 0.3 + colorEase2 * 0.3 + colorEase3 * 0.2 + colorEase4 * 0.2);
     }
     
-    // Smooth color interpolation through theme colors
+    // Ultra-wide color interpolation with more gradual transitions
     const color = interpolateColor(
       interpolationProgress,
-      [0, 0.3, 1], // Input range: far -> nearby -> current
-      [theme.colors.secondaryText, theme.colors.text, theme.colors.highlight] // Color progression
+      [0, 0.15, 0.4, 0.7, 1], // Extended range for smoother wide transitions
+      [theme.colors.secondaryText, theme.colors.secondaryText, theme.colors.text, theme.colors.text, theme.colors.highlight]
     );
     
     return {
@@ -168,24 +191,31 @@ export const CircularSeconds: React.FC<CircularSecondsProps> = ({ currentSecond 
   useEffect(() => {
     let animationFrame: number;
     let lastTime = 0;
+    let lastSmoothedTime = 0;
     
     const updateContinuousTime = (timestamp: number) => {
-      // Throttle to ~120fps for ultra-smooth animation without overloading
-      if (timestamp - lastTime >= 8.33) { // ~120fps
+      // Run at native refresh rate (60fps/120fps/144fps depending on device)
+      if (timestamp - lastTime >= 4) { // ~250fps max, adapts to device refresh rate
         const now = new Date();
         const seconds = now.getSeconds();
         const milliseconds = now.getMilliseconds();
         
-        // Create ultra-smooth continuous value with higher precision
-        const smoothTime = seconds + (milliseconds / 1000);
+        // Create ultra-precise continuous value
+        const currentTime = seconds + (milliseconds / 1000);
         
-        // Update the shared value directly for instant UI updates
-        continuousTime.value = smoothTime;
+        // Add micro-interpolation for even smoother motion between frames
+        const timeDelta = timestamp - lastTime;
+        const interpolationFactor = Math.min(timeDelta / 16.67, 1); // Normalize to 60fps baseline
+        const smoothedTime = lastSmoothedTime + (currentTime - lastSmoothedTime) * interpolationFactor * 0.8;
+        
+        // Update the shared value with interpolated time
+        continuousTime.value = smoothedTime;
         
         lastTime = timestamp;
+        lastSmoothedTime = smoothedTime;
       }
       
-      // Schedule next update
+      // Schedule next update at native refresh rate
       animationFrame = requestAnimationFrame(updateContinuousTime);
     };
     
