@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useTheme } from '../contexts/ThemeContext';
+import { getClockSize } from '../utils/responsive';
 
-const { width, height } = Dimensions.get('window');
-const CLOCK_SIZE = Math.min(width, height) * 0.6;
+const CLOCK_SIZE = getClockSize();
 const RADIUS = CLOCK_SIZE / 2;
 
 interface GradientBorderProps {

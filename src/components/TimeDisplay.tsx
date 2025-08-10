@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { getTimeSize } from '../utils/responsive';
 
 interface TimeDisplayProps {
   time: string;
@@ -11,7 +12,7 @@ export const TimeDisplay: React.FC<TimeDisplayProps> = ({ time }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.time, { color: theme.colors.text }]}>{time}</Text>
+      <Text style={[styles.time, { color: theme.colors.text, fontSize: getTimeSize() }]}>{time}</Text>
     </View>
   );
 };
@@ -23,7 +24,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   time: {
-    fontSize: 60,
     fontWeight: '300',
     letterSpacing: -2,
   },

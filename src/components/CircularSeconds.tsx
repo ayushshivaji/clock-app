@@ -1,81 +1,146 @@
-import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import Svg, { Line, Defs, LinearGradient, Stop } from 'react-native-svg';
 import Animated, {
   useAnimatedStyle,
   withSpring,
-  interpolate,
+  useSharedValue,
+  useDerivedValue,
 } from 'react-native-reanimated';
 import { useTheme } from '../contexts/ThemeContext';
+import { getClockSize } from '../utils/responsive';
 
-const { width, height } = Dimensions.get('window');
-const CLOCK_SIZE = Math.min(width, height) * 0.6;
+const CLOCK_SIZE = getClockSize();
 const RADIUS = CLOCK_SIZE / 2 - 20;
 
 interface CircularSecondsProps {
   currentSecond: number;
 }
 
+// Create a separate component for each second number to handle animations properly
+const SecondNumber: React.FC<{ 
+  second: number; 
+  isActive: boolean; 
+  x: number; 
+  y: number; 
+  theme: any; 
+}> = ({ second, isActive, x, y, theme }) => {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(0.4);
+
+  React.useEffect(() => {
+    scale.value = withSpring(isActive ? 1.4 : 1, {
+      damping: 15,
+      stiffness: 150,
+    });
+    opacity.value = withSpring(isActive ? 1 : 0.4, {
+      damping: 20,
+      stiffness: 100,
+    });
+  }, [isActive]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: x },
+      { translateY: y },
+      { scale: scale.value },
+    ],
+  }));
+
+  const textAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View style={[styles.numberContainer, animatedStyle]}>
+      <Animated.Text
+        style={[
+          styles.number,
+          textAnimatedStyle,
+          {
+            color: isActive ? theme.colors.highlight : theme.colors.secondaryText,
+            fontWeight: isActive ? 'bold' : 'normal',
+          },
+        ]}
+      >
+        {second.toString().padStart(2, '0')}
+      </Animated.Text>
+      {isActive && (
+        <View
+          style={[
+            styles.highlightGlow,
+            {
+              backgroundColor: theme.colors.highlightGlow,
+            },
+          ]}
+        />
+      )}
+    </Animated.View>
+  );
+};
+
 export const CircularSeconds: React.FC<CircularSecondsProps> = ({ currentSecond }) => {
   const { theme } = useTheme();
 
-  const renderSecondNumbers = () => {
-    const numbers = [];
-    
+  const activeAngle = (currentSecond * 6 - 90) * (Math.PI / 180);
+  const activeX = RADIUS * Math.cos(activeAngle);
+  const activeY = RADIUS * Math.sin(activeAngle);
+
+  // Center of the clock
+  const centerX = CLOCK_SIZE / 2;
+  const centerY = CLOCK_SIZE / 2;
+
+  // End position for radius line
+  const endX = centerX + activeX;
+  const endY = centerY + activeY;
+
+  const secondPositions = useMemo(() => {
+    const positions = [];
     for (let i = 0; i < 60; i++) {
       const angle = (i * 6 - 90) * (Math.PI / 180);
       const x = RADIUS * Math.cos(angle);
       const y = RADIUS * Math.sin(angle);
-      
-      const isHighlighted = i === currentSecond;
-      
-      numbers.push(
-        <View
-          key={i}
-          style={[
-            styles.numberContainer,
-            {
-              transform: [
-                { translateX: x },
-                { translateY: y },
-              ],
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.number,
-              {
-                color: isHighlighted 
-                  ? theme.colors.highlight 
-                  : theme.colors.secondaryText,
-                fontSize: isHighlighted ? 20 : 16,
-                fontWeight: isHighlighted ? 'bold' : 'normal',
-                opacity: isHighlighted ? 1 : 0.1,
-              },
-            ]}
-          >
-            {i.toString().padStart(2, '0')}
-          </Text>
-          {isHighlighted && (
-            <View
-              style={[
-                styles.highlightGlow,
-                {
-                  backgroundColor: theme.colors.highlightGlow,
-                },
-              ]}
-            />
-          )}
-        </View>
-      );
+      positions.push({ second: i, x, y });
     }
-    
-    return numbers;
-  };
+    return positions;
+  }, []);
 
   return (
     <View style={styles.container}>
-      {renderSecondNumbers()}
+      {/* Radius line with gradient */}
+      <Svg 
+        width={CLOCK_SIZE} 
+        height={CLOCK_SIZE}
+        style={styles.svgContainer}
+      >
+        <Defs>
+          <LinearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <Stop offset="0%" stopColor={theme.colors.secondaryText} stopOpacity="0" />
+            <Stop offset="50%" stopColor={theme.colors.secondaryText} stopOpacity="0.3" />
+            <Stop offset="100%" stopColor={theme.colors.secondaryText} stopOpacity="0" />
+          </LinearGradient>
+        </Defs>
+        <Line
+          x1={centerX}
+          y1={centerY}
+          x2={endX}
+          y2={endY}
+          stroke="url(#lineGradient)"
+          strokeWidth="1"
+        />
+      </Svg>
+      
+      {/* All second numbers */}
+      {secondPositions.map(({ second, x, y }) => (
+        <SecondNumber
+          key={second}
+          second={second}
+          isActive={second === currentSecond}
+          x={x}
+          y={y}
+          theme={theme}
+        />
+      ))}
     </View>
   );
 };
@@ -86,6 +151,9 @@ const styles = StyleSheet.create({
     height: CLOCK_SIZE,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  svgContainer: {
+    position: 'absolute',
   },
   numberContainer: {
     position: 'absolute',

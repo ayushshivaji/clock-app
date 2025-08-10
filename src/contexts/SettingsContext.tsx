@@ -5,6 +5,7 @@ interface Settings {
   timeZone: string;
   is24Hour: boolean;
   animationsEnabled: boolean;
+  paperMacheBackground: boolean;
 }
 
 interface SettingsContextType {
@@ -16,6 +17,7 @@ const defaultSettings: Settings = {
   timeZone: 'local',
   is24Hour: false,
   animationsEnabled: true,
+  paperMacheBackground: false,
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);

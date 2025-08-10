@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Theme, ThemeMode, ColorScheme, getTheme } from '../constants/themes';
 
 interface ThemeContextType {
@@ -22,8 +23,46 @@ interface ThemeProviderProps {
 }
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
-  const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
-  const [colorScheme, setColorScheme] = useState<ColorScheme>('default');
+  const [themeMode, setThemeModeState] = useState<ThemeMode>('dark');
+  const [colorScheme, setColorSchemeState] = useState<ColorScheme>('default');
+
+  useEffect(() => {
+    loadThemeSettings();
+  }, []);
+
+  const loadThemeSettings = async () => {
+    try {
+      const savedMode = await AsyncStorage.getItem('@theme_mode');
+      const savedScheme = await AsyncStorage.getItem('@color_scheme');
+      
+      if (savedMode) {
+        setThemeModeState(savedMode as ThemeMode);
+      }
+      if (savedScheme) {
+        setColorSchemeState(savedScheme as ColorScheme);
+      }
+    } catch (error) {
+      console.error('Error loading theme settings:', error);
+    }
+  };
+
+  const setThemeMode = async (mode: ThemeMode) => {
+    try {
+      setThemeModeState(mode);
+      await AsyncStorage.setItem('@theme_mode', mode);
+    } catch (error) {
+      console.error('Error saving theme mode:', error);
+    }
+  };
+
+  const setColorScheme = async (scheme: ColorScheme) => {
+    try {
+      setColorSchemeState(scheme);
+      await AsyncStorage.setItem('@color_scheme', scheme);
+    } catch (error) {
+      console.error('Error saving color scheme:', error);
+    }
+  };
 
   const theme = getTheme(themeMode, colorScheme);
 

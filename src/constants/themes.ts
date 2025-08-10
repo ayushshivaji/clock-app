@@ -19,7 +19,11 @@ export interface Theme {
 
 export const getTheme = (mode: ThemeMode, colorScheme: ColorScheme): Theme => {
   const baseColors = Colors[mode];
-  const schemeColors = colorScheme !== 'default' ? ThemeColors[colorScheme] : {};
+  
+  let schemeColors = {};
+  if (colorScheme !== 'default' && ThemeColors[colorScheme]) {
+    schemeColors = ThemeColors[colorScheme][mode] || {};
+  }
 
   return {
     mode,
