@@ -6,6 +6,7 @@ interface Settings {
   is24Hour: boolean;
   animationsEnabled: boolean;
   paperMacheBackground: boolean;
+  showRadiusLine: boolean; // Toggle for radius line visibility
   animationQuality: 'performance' | 'balanced' | 'ultra-smooth';
   motionSensitivity: number; // 0.5 to 2.0 - affects influence zone size
 }
@@ -20,6 +21,7 @@ const defaultSettings: Settings = {
   is24Hour: false,
   animationsEnabled: true,
   paperMacheBackground: false,
+  showRadiusLine: true, // Radius line enabled by default
   animationQuality: 'balanced',
   motionSensitivity: 1.0,
 };

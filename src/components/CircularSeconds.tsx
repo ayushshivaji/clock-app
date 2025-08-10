@@ -13,7 +13,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { getClockSize } from '../utils/responsive';
 
 const CLOCK_SIZE = getClockSize();
-const RADIUS = CLOCK_SIZE / 2 - 5; // Larger radius for better spacing
+const RADIUS = CLOCK_SIZE / 3; // Smaller radius to bring seconds closer
 const CENTER_X = CLOCK_SIZE / 2;
 const CENTER_Y = CLOCK_SIZE / 2;
 
@@ -44,31 +44,15 @@ const RadiusLine: React.FC<{
   theme: any;
 }> = ({ continuousTime, theme }) => {
   
-  // Track cumulative rotation to avoid wraparound jumps
-  const cumulativeRotation = useSharedValue(0);
-  const lastTime = useSharedValue(0);
-  
   const AnimatedSvg = Animated.createAnimatedComponent(Svg);
 
-  // Calculate smooth continuous angle without wraparound issues
+  // Simple, direct angle calculation - no cumulative rotation complexity
   const currentAngleRadians = useDerivedValue(() => {
     const currentTime = continuousTime.value;
-    const timeDiff = currentTime - lastTime.value;
     
-    // Handle wraparound: if time jumps backwards significantly, we wrapped around
-    if (timeDiff < -30) {
-      // We wrapped from 59.x to 0.x, add full rotation to maintain continuity
-      cumulativeRotation.value += 360;
-    } else if (timeDiff > 30) {
-      // We jumped forward significantly (shouldn't happen but safety check)
-      cumulativeRotation.value -= 360;
-    }
-    
-    lastTime.value = currentTime;
-    
-    // Calculate angle with cumulative rotation for smooth wraparound
-    const totalDegrees = (currentTime * 6 - 90) + cumulativeRotation.value;
-    return (totalDegrees * Math.PI) / 180;
+    // Simple direct calculation - let the animation system handle smoothness
+    const degrees = currentTime * 6 - 90; // -90 to start at top (12 o'clock)
+    return (degrees * Math.PI) / 180;
   });
 
   const AnimatedLine = Animated.createAnimatedComponent(Line);
@@ -116,21 +100,26 @@ const SecondNumber: React.FC<{
   motionSensitivity: number;
 }> = ({ second, continuousTime, x, y, theme, animationQuality, motionSensitivity }) => {
   
-  // ROBUST highlighting - simple and reliable
+  // SMOOTH single second highlighting with proper transitions
   const animatedStyle = useAnimatedStyle(() => {
-    // Calculate distance from current continuous time
+    // Calculate distance to this second (handles wraparound)
     const rawDiff = Math.abs(continuousTime.value - second);
     const circularDiff = Math.min(rawDiff, 60 - rawDiff);
     
     // ALWAYS set base values first
     let scale = 0.6;
-    let opacity = 0.3;
+    let opacity = 0.0;
+    let easedProgress = 0.0;
     
-    // Simple, reliable highlighting
-    if (circularDiff < 2.0) {
-      const proximity = Math.max(0, 1 - (circularDiff / 2.0));
-      scale = 0.6 + proximity * 0.8; // 0.6 to 1.4
-      opacity = 0.3 + proximity * 0.7; // 0.3 to 1.0
+    // Only highlight seconds within 1.0 range (current second illuminated longer)
+    if (circularDiff <= 1.0) {
+      // Smooth transition from 1.0 distance to 0.0 distance
+      const proximity = 1 - (circularDiff / 1.0); // 1.0 at exact match, 0.0 at edges
+      
+      // Apply smooth easing for natural animation
+      easedProgress = proximity * proximity; // Quadratic easing
+      scale = 0.6 + easedProgress * 1.0; // 0.6 to 1.6
+      opacity = easedProgress; // 0.0 to 1.0
     }
     
     return {
@@ -138,24 +127,34 @@ const SecondNumber: React.FC<{
         { translateX: x },
         { translateY: y },
         { scale },
+        { translateZ: easedProgress * 20 }, // 3D pop effect - comes toward viewer
       ],
       opacity,
+      elevation: easedProgress * 10, // Android shadow elevation for depth
+      shadowColor: theme.colors.highlight,
+      shadowOffset: { width: 0, height: easedProgress * 4 },
+      shadowOpacity: easedProgress * 0.3,
+      shadowRadius: easedProgress * 8,
     };
   });
 
-  // ROBUST color highlighting - simple and reliable
+  // SMOOTH color transition - matches smooth highlighting
   const textAnimatedStyle = useAnimatedStyle(() => {
+    // Use same smooth logic as scaling
     const rawDiff = Math.abs(continuousTime.value - second);
     const circularDiff = Math.min(rawDiff, 60 - rawDiff);
     
     // ALWAYS set default color first
     let color = theme.colors.secondaryText;
     
-    // Simple, reliable color highlighting
-    if (circularDiff < 2.0) {
-      const proximity = Math.max(0, 1 - (circularDiff / 2.0));
+    // Only color seconds within 1.0 range (matches illumination duration)
+    if (circularDiff <= 1.0) {
+      const proximity = 1 - (circularDiff / 1.0);
+      const colorIntensity = proximity * proximity; // Same quadratic easing
+      
+      // Smooth color interpolation
       color = interpolateColor(
-        proximity,
+        colorIntensity,
         [0, 1],
         [theme.colors.secondaryText, theme.colors.highlight]
       );
@@ -190,63 +189,21 @@ export const CircularSeconds: React.FC<CircularSecondsProps> = ({ currentSecond 
   useEffect(() => {
     let animationFrame: number;
     let lastTime = 0;
-    let lastSmoothedTime = 0;
-    let timeHistory: number[] = []; // Store last 5 time samples for multi-sample averaging
-    let velocityHistory: number[] = []; // Track time velocity for prediction
-    let refreshRate = 60; // Detected refresh rate
-    
-    // Detect device refresh rate for optimal smoothing
-    const detectRefreshRate = () => {
-      const start = performance.now();
-      let frameCount = 0;
-      const measureFrames = (currentTime: number) => {
-        frameCount++;
-        if (frameCount < 60) {
-          requestAnimationFrame(measureFrames);
-        } else {
-          const elapsed = currentTime - start;
-          refreshRate = Math.round((frameCount * 1000) / elapsed);
-          // Clamp to common refresh rates
-          if (refreshRate > 110) refreshRate = 120;
-          else if (refreshRate > 90) refreshRate = 90;
-          else refreshRate = 60;
-        }
-      };
-      requestAnimationFrame(measureFrames);
-    };
-    detectRefreshRate();
     
     const updateContinuousTime = (timestamp: number) => {
-      // Moderate speed - smooth but responsive
-      if (timestamp - lastTime >= 12) { // ~80fps for smooth but faster animation
+      // Simple, direct time updates - no complex smoothing
+      if (timestamp - lastTime >= 16) { // ~60fps - simpler is better
         const now = new Date();
         const seconds = now.getSeconds();
         const milliseconds = now.getMilliseconds();
         
-        // Create ultra-precise continuous value
+        // Simple continuous value - no smoothing algorithms
         const currentTime = seconds + (milliseconds / 1000);
         
-        // Keep some history for stability but less than before
-        timeHistory.push(currentTime);
-        if (timeHistory.length > 3) timeHistory.shift(); // Keep last 3 samples
-        
-        // Moderate smoothing - faster than before but not shaky
-        const timeDelta = timestamp - lastTime;
-        let smoothingFactor = 0.75; // Balanced smoothing
-        if (refreshRate >= 120) smoothingFactor = 0.8; // Slightly more for high refresh
-        
-        // Simple averaging with current time for stability
-        const avgTime = timeHistory.reduce((a, b) => a + b) / timeHistory.length;
-        const blendedTime = avgTime * 0.7 + currentTime * 0.3; // Favor average for stability
-        
-        // Smooth interpolation with moderate factor
-        const smoothedTime = lastSmoothedTime + (blendedTime - lastSmoothedTime) * smoothingFactor;
-        
-        // Update the shared value
-        continuousTime.value = smoothedTime;
+        // Direct assignment - let React Native Reanimated handle the smoothness
+        continuousTime.value = currentTime;
         
         lastTime = timestamp;
-        lastSmoothedTime = smoothedTime;
       }
       
       // Schedule next update
@@ -276,8 +233,10 @@ export const CircularSeconds: React.FC<CircularSecondsProps> = ({ currentSecond 
 
   return (
     <View style={styles.container}>
-      {/* Animated radius line pointing to active second */}
-      <RadiusLine continuousTime={continuousTime} theme={theme} />
+      {/* Animated radius line pointing to active second - conditional */}
+      {settings.showRadiusLine && (
+        <RadiusLine continuousTime={continuousTime} theme={theme} />
+      )}
       
       {/* All second numbers with continuous flowing animation */}
       {settings.animationsEnabled ? (

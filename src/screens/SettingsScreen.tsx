@@ -31,6 +31,10 @@ export const SettingsScreen: React.FC = () => {
     updateSettings({ paperMacheBackground });
   };
 
+  const handleRadiusLineToggle = (showRadiusLine: boolean) => {
+    updateSettings({ showRadiusLine });
+  };
+
   const handleThemeSelect = (scheme: ColorScheme) => {
     setColorScheme(scheme);
     setShowThemeSelector(false);
@@ -103,6 +107,13 @@ export const SettingsScreen: React.FC = () => {
             type="toggle"
             isEnabled={settings.animationsEnabled}
             onToggle={handleAnimationsToggle}
+          />
+
+          <SettingsItem
+            label="Show Radius Line"
+            type="toggle"
+            isEnabled={settings.showRadiusLine}
+            onToggle={handleRadiusLineToggle}
           />
         </View>
 
