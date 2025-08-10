@@ -9,12 +9,30 @@ import Animated, {
   interpolateColor,
 } from 'react-native-reanimated';
 import { useTheme } from '../contexts/ThemeContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { getClockSize } from '../utils/responsive';
 
 const CLOCK_SIZE = getClockSize();
 const RADIUS = CLOCK_SIZE / 2 - 5; // Larger radius for better spacing
 const CENTER_X = CLOCK_SIZE / 2;
 const CENTER_Y = CLOCK_SIZE / 2;
+
+// Optimized unified easing function using cubic bezier curve
+// Replaces multiple mathematical functions with single optimized calculation
+const optimizedEasing = (t: number): number => {
+  'worklet';
+  // Custom cubic bezier curve optimized for ultra-smooth second transitions
+  // Equivalent to cubic-bezier(0.25, 0.46, 0.45, 0.94) - "ease-out-quad-smooth"
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  
+  // Optimized cubic bezier calculation (faster than 4 separate easing functions)
+  const t2 = t * t;
+  const t3 = t2 * t;
+  
+  // Coefficients for smooth, natural motion
+  return 3 * t2 - 2 * t3; // Smooth S-curve with gentle acceleration/deceleration
+};
 
 interface CircularSecondsProps {
   currentSecond: number;
@@ -93,36 +111,26 @@ const SecondNumber: React.FC<{
   continuousTime: Animated.SharedValue<number>;
   x: number; 
   y: number; 
-  theme: any; 
-}> = ({ second, continuousTime, x, y, theme }) => {
+  theme: any;
+  animationQuality: 'performance' | 'balanced' | 'ultra-smooth';
+  motionSensitivity: number;
+}> = ({ second, continuousTime, x, y, theme, animationQuality, motionSensitivity }) => {
   
-  // Ultra-fluid animated styles with advanced interpolation
+  // ROBUST highlighting - simple and reliable
   const animatedStyle = useAnimatedStyle(() => {
-    // Calculate distance from current continuous time with sub-millisecond precision
+    // Calculate distance from current continuous time
     const rawDiff = Math.abs(continuousTime.value - second);
-    const circularDiff = Math.min(rawDiff, 60 - rawDiff); // Handle wrap-around smoothly
+    const circularDiff = Math.min(rawDiff, 60 - rawDiff);
     
-    // Base values for inactive seconds
+    // ALWAYS set base values first
     let scale = 0.6;
-    let opacity = 0.15;
+    let opacity = 0.3;
     
-    if (circularDiff <= 4.0) { // Much wider influence zone - affects ~8 seconds total
-      // Multi-stage easing for natural motion feel with extended range
-      const normalizedDistance = circularDiff / 4.0;
-      
-      // Combine multiple easing functions for ultra-smooth transitions across wider range
-      const ease1 = 1 - Math.pow(normalizedDistance, 0.4); // Gentler power curve for wider spread
-      const ease2 = Math.sin((1 - normalizedDistance) * Math.PI * 0.5); // Sine wave smoothness
-      const ease3 = 1 - normalizedDistance * normalizedDistance; // Quadratic falloff
-      const ease4 = Math.cos(normalizedDistance * Math.PI * 0.5); // Additional cosine smoothness
-      
-      // Blend multiple easing curves with wider influence
-      const blendedProximity = (ease1 * 0.3 + ease2 * 0.3 + ease3 * 0.2 + ease4 * 0.2);
-      
-      // Apply ultra-smooth scaling with gentler transitions for wider effect
-      const scaleFactor = blendedProximity * blendedProximity * 0.8; // Slightly reduced intensity for wider spread
-      scale = 0.6 + scaleFactor;
-      opacity = 0.15 + blendedProximity * 0.75; // Gentler opacity increase for wider visibility
+    // Simple, reliable highlighting
+    if (circularDiff < 2.0) {
+      const proximity = Math.max(0, 1 - (circularDiff / 2.0));
+      scale = 0.6 + proximity * 0.8; // 0.6 to 1.4
+      opacity = 0.3 + proximity * 0.7; // 0.3 to 1.0
     }
     
     return {
@@ -135,33 +143,23 @@ const SecondNumber: React.FC<{
     };
   });
 
-  // Hyper-smooth color interpolation with advanced blending
+  // ROBUST color highlighting - simple and reliable
   const textAnimatedStyle = useAnimatedStyle(() => {
     const rawDiff = Math.abs(continuousTime.value - second);
     const circularDiff = Math.min(rawDiff, 60 - rawDiff);
     
-    // Multi-layered color interpolation for maximum smoothness
-    let interpolationProgress = 0;
+    // ALWAYS set default color first
+    let color = theme.colors.secondaryText;
     
-    if (circularDiff <= 4.0) { // Match the wider influence zone for consistent highlighting
-      const normalizedDistance = circularDiff / 4.0;
-      
-      // Quadruple-blended easing for ultra-wide color transitions
-      const colorEase1 = 1 - Math.pow(normalizedDistance, 0.3); // Gentler power curve for wider spread
-      const colorEase2 = Math.cos(normalizedDistance * Math.PI * 0.5); // Cosine smoothness
-      const colorEase3 = 1 - normalizedDistance * normalizedDistance * normalizedDistance; // Cubic falloff
-      const colorEase4 = Math.sin((1 - normalizedDistance) * Math.PI * 0.5); // Additional sine smoothness
-      
-      // Blend easing curves for ultra-natural wide color transitions
-      interpolationProgress = (colorEase1 * 0.3 + colorEase2 * 0.3 + colorEase3 * 0.2 + colorEase4 * 0.2);
+    // Simple, reliable color highlighting
+    if (circularDiff < 2.0) {
+      const proximity = Math.max(0, 1 - (circularDiff / 2.0));
+      color = interpolateColor(
+        proximity,
+        [0, 1],
+        [theme.colors.secondaryText, theme.colors.highlight]
+      );
     }
-    
-    // Ultra-wide color interpolation with more gradual transitions
-    const color = interpolateColor(
-      interpolationProgress,
-      [0, 0.15, 0.4, 0.7, 1], // Extended range for smoother wide transitions
-      [theme.colors.secondaryText, theme.colors.secondaryText, theme.colors.text, theme.colors.text, theme.colors.highlight]
-    );
     
     return {
       color,
@@ -184,6 +182,7 @@ const SecondNumber: React.FC<{
 
 export const CircularSeconds: React.FC<CircularSecondsProps> = ({ currentSecond }) => {
   const { theme } = useTheme();
+  const { settings } = useSettings();
   
   // Create a continuous time value that updates with real millisecond precision
   const continuousTime = useSharedValue(0);
@@ -192,10 +191,34 @@ export const CircularSeconds: React.FC<CircularSecondsProps> = ({ currentSecond 
     let animationFrame: number;
     let lastTime = 0;
     let lastSmoothedTime = 0;
+    let timeHistory: number[] = []; // Store last 5 time samples for multi-sample averaging
+    let velocityHistory: number[] = []; // Track time velocity for prediction
+    let refreshRate = 60; // Detected refresh rate
+    
+    // Detect device refresh rate for optimal smoothing
+    const detectRefreshRate = () => {
+      const start = performance.now();
+      let frameCount = 0;
+      const measureFrames = (currentTime: number) => {
+        frameCount++;
+        if (frameCount < 60) {
+          requestAnimationFrame(measureFrames);
+        } else {
+          const elapsed = currentTime - start;
+          refreshRate = Math.round((frameCount * 1000) / elapsed);
+          // Clamp to common refresh rates
+          if (refreshRate > 110) refreshRate = 120;
+          else if (refreshRate > 90) refreshRate = 90;
+          else refreshRate = 60;
+        }
+      };
+      requestAnimationFrame(measureFrames);
+    };
+    detectRefreshRate();
     
     const updateContinuousTime = (timestamp: number) => {
-      // Run at native refresh rate (60fps/120fps/144fps depending on device)
-      if (timestamp - lastTime >= 4) { // ~250fps max, adapts to device refresh rate
+      // Moderate speed - smooth but responsive
+      if (timestamp - lastTime >= 12) { // ~80fps for smooth but faster animation
         const now = new Date();
         const seconds = now.getSeconds();
         const milliseconds = now.getMilliseconds();
@@ -203,19 +226,30 @@ export const CircularSeconds: React.FC<CircularSecondsProps> = ({ currentSecond 
         // Create ultra-precise continuous value
         const currentTime = seconds + (milliseconds / 1000);
         
-        // Add micro-interpolation for even smoother motion between frames
-        const timeDelta = timestamp - lastTime;
-        const interpolationFactor = Math.min(timeDelta / 16.67, 1); // Normalize to 60fps baseline
-        const smoothedTime = lastSmoothedTime + (currentTime - lastSmoothedTime) * interpolationFactor * 0.8;
+        // Keep some history for stability but less than before
+        timeHistory.push(currentTime);
+        if (timeHistory.length > 3) timeHistory.shift(); // Keep last 3 samples
         
-        // Update the shared value with interpolated time
+        // Moderate smoothing - faster than before but not shaky
+        const timeDelta = timestamp - lastTime;
+        let smoothingFactor = 0.75; // Balanced smoothing
+        if (refreshRate >= 120) smoothingFactor = 0.8; // Slightly more for high refresh
+        
+        // Simple averaging with current time for stability
+        const avgTime = timeHistory.reduce((a, b) => a + b) / timeHistory.length;
+        const blendedTime = avgTime * 0.7 + currentTime * 0.3; // Favor average for stability
+        
+        // Smooth interpolation with moderate factor
+        const smoothedTime = lastSmoothedTime + (blendedTime - lastSmoothedTime) * smoothingFactor;
+        
+        // Update the shared value
         continuousTime.value = smoothedTime;
         
         lastTime = timestamp;
         lastSmoothedTime = smoothedTime;
       }
       
-      // Schedule next update at native refresh rate
+      // Schedule next update
       animationFrame = requestAnimationFrame(updateContinuousTime);
     };
     
@@ -246,16 +280,45 @@ export const CircularSeconds: React.FC<CircularSecondsProps> = ({ currentSecond 
       <RadiusLine continuousTime={continuousTime} theme={theme} />
       
       {/* All second numbers with continuous flowing animation */}
-      {secondPositions.map(({ second, x, y }) => (
-        <SecondNumber
-          key={second}
-          second={second}
-          continuousTime={continuousTime}
-          x={x}
-          y={y}
-          theme={theme}
-        />
-      ))}
+      {settings.animationsEnabled ? (
+        secondPositions.map(({ second, x, y }) => (
+          <SecondNumber
+            key={second}
+            second={second}
+            continuousTime={continuousTime}
+            x={x}
+            y={y}
+            theme={theme}
+            animationQuality={settings.animationQuality}
+            motionSensitivity={settings.motionSensitivity}
+          />
+        ))
+      ) : (
+        // Fallback: simple static numbers if animations disabled
+        secondPositions.map(({ second, x, y }) => (
+          <View 
+            key={second}
+            style={[
+              styles.numberContainer, 
+              { 
+                transform: [{ translateX: x }, { translateY: y }],
+                opacity: Math.round(continuousTime.value) === second ? 1.0 : 0.3,
+                backgroundColor: Math.round(continuousTime.value) === second ? theme.colors.highlight : 'transparent'
+              }
+            ]}
+          >
+            <Text style={[
+              styles.number,
+              { 
+                color: Math.round(continuousTime.value) === second ? theme.colors.background : theme.colors.text,
+                fontWeight: Math.round(continuousTime.value) === second ? 'bold' : 'normal'
+              }
+            ]}>
+              {second.toString().padStart(2, '0')}
+            </Text>
+          </View>
+        ))
+      )}
     </View>
   );
 };

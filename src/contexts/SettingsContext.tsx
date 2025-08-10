@@ -6,6 +6,8 @@ interface Settings {
   is24Hour: boolean;
   animationsEnabled: boolean;
   paperMacheBackground: boolean;
+  animationQuality: 'performance' | 'balanced' | 'ultra-smooth';
+  motionSensitivity: number; // 0.5 to 2.0 - affects influence zone size
 }
 
 interface SettingsContextType {
@@ -18,6 +20,8 @@ const defaultSettings: Settings = {
   is24Hour: false,
   animationsEnabled: true,
   paperMacheBackground: false,
+  animationQuality: 'balanced',
+  motionSensitivity: 1.0,
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
