@@ -28,13 +28,13 @@ export const scaleFontSize = (size: number): number => {
 export const getClockSize = (): number => {
   const minDimension = Math.min(width, height);
   if (isLargeScreen) {
-    return minDimension * 0.35; // Smaller on large screens
+    return minDimension * 0.45; // Bigger on large screens
   } else if (isTablet) {
-    return minDimension * 0.4;
+    return minDimension * 0.5;
   } else if (isSmallScreen) {
-    return minDimension * 0.5; // Larger on small screens
+    return minDimension * 0.6; // Larger on small screens
   }
-  return minDimension * 0.45; // Default size
+  return minDimension * 0.55; // Bigger default size
 };
 
 export const getTimeSize = (): number => {

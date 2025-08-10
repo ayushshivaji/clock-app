@@ -7,7 +7,6 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { TimeDisplay } from '../components/TimeDisplay';
 import { CircularSeconds } from '../components/CircularSeconds';
-import { GradientBorder } from '../components/GradientBorder';
 import { PaperMacheBackground } from '../components/PaperMacheBackground';
 import { formatTime, getSeconds, getTimeForTimeZone } from '../utils/time';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -28,47 +27,24 @@ export const ClockScreen: React.FC = () => {
   const navigation = useNavigation<ClockScreenNavigationProp>();
   
   const [time, setTime] = useState(new Date());
-  const [rotation, setRotation] = useState(0);
   const [isInFullscreen, setIsInFullscreen] = useState(false);
 
   useEffect(() => {
-    let animationFrameId: number;
-    let lastSecond = -1;
+    let intervalId: NodeJS.Timeout;
 
     const updateTime = () => {
       const now = getTimeForTimeZone(settings.timeZone);
-      const currentSecond = now.getSeconds();
-      
-      // Only update state when second changes or for animations
-      if (currentSecond !== lastSecond) {
-        setTime(now);
-        lastSecond = currentSecond;
-      }
-      
-      if (settings.animationsEnabled) {
-        setRotation(prev => prev + 0.1);
-      }
-
-      // Use requestAnimationFrame for smooth animations on web
-      if (isWeb && settings.animationsEnabled) {
-        animationFrameId = requestAnimationFrame(updateTime);
-      }
+      setTime(now);
     };
 
-    // For non-web platforms or when animations are disabled, use interval
-    if (!isWeb || !settings.animationsEnabled) {
-      const interval = setInterval(updateTime, 1000); // Update every second
-      return () => clearInterval(interval);
-    } else {
-      // For web with animations, use requestAnimationFrame
-      animationFrameId = requestAnimationFrame(updateTime);
-      return () => {
-        if (animationFrameId) {
-          cancelAnimationFrame(animationFrameId);
-        }
-      };
-    }
-  }, [settings.timeZone, settings.animationsEnabled]);
+    // Update time every second
+    updateTime(); // Initial update
+    intervalId = setInterval(updateTime, 1000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [settings.timeZone]);
 
   // Web-specific keyboard shortcuts and fullscreen
   useEffect(() => {
@@ -142,7 +118,6 @@ export const ClockScreen: React.FC = () => {
       )}
       
       <View style={styles.clockContainer}>
-        <GradientBorder rotation={rotation} />
         <CircularSeconds currentSecond={currentSecond} />
         <TimeDisplay time={formattedTime} />
       </View>
