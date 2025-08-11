@@ -1,12 +1,14 @@
 import React, { useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Svg, { Defs, LinearGradient, Stop, Line } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Stop, Line, Circle, RadialGradient, Ellipse } from 'react-native-svg';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   useDerivedValue,
   runOnJS,
   interpolateColor,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -89,6 +91,118 @@ const RadiusLine: React.FC<{
   );
 };
 
+// Water bubble component that encapsulates and moves to the current second
+const WaterBubble: React.FC<{
+  continuousTime: Animated.SharedValue<number>;
+  theme: any;
+  secondPositions: { second: number; x: number; y: number }[];
+}> = ({ continuousTime, theme, secondPositions }) => {
+  
+  const AnimatedSvg = Animated.createAnimatedComponent(Svg);
+  const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+  const AnimatedEllipse = Animated.createAnimatedComponent(Ellipse);
+
+  // Calculate bubble position based on continuous time
+  const bubblePosition = useDerivedValue(() => {
+    const currentTime = continuousTime.value;
+    const currentSecond = Math.floor(currentTime);
+    const nextSecond = (currentSecond + 1) % 60;
+    const progress = currentTime - currentSecond;
+    
+    // Start moving when we're 0.2 seconds into the current second
+    const moveProgress = Math.max(0, Math.min(1, (progress - 0.2) / 0.6));
+    // Use smooth easing with built-in function
+    const easedProgress = moveProgress * moveProgress * (3 - 2 * moveProgress); // Smooth step
+    
+    const currentPos = secondPositions[currentSecond];
+    const nextPos = secondPositions[nextSecond];
+    
+    // Interpolate position
+    const x = currentPos.x + (nextPos.x - currentPos.x) * easedProgress;
+    const y = currentPos.y + (nextPos.y - currentPos.y) * easedProgress;
+    
+    return { x, y, progress: easedProgress };
+  });
+
+  const bubbleStyle = useAnimatedStyle(() => {
+    const pos = bubblePosition.value;
+    return {
+      transform: [
+        { translateX: pos.x },
+        { translateY: pos.y },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View style={[styles.bubbleContainer, bubbleStyle]}>
+      <Svg width={40} height={40} style={styles.bubbleSvg}>
+        <Defs>
+          {/* Main bubble gradient - translucent with realistic refraction */}
+          <RadialGradient id="bubbleGradient" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor={theme.colors.highlight} stopOpacity="0.1" />
+            <Stop offset="30%" stopColor={theme.colors.highlight} stopOpacity="0.15" />
+            <Stop offset="70%" stopColor={theme.colors.highlight} stopOpacity="0.25" />
+            <Stop offset="85%" stopColor={theme.colors.highlight} stopOpacity="0.4" />
+            <Stop offset="100%" stopColor={theme.colors.highlight} stopOpacity="0.6" />
+          </RadialGradient>
+          
+          {/* Bubble shine gradient for realistic highlight */}
+          <RadialGradient id="bubbleShine" cx="35%" cy="35%" r="30%">
+            <Stop offset="0%" stopColor="#ffffff" stopOpacity="0.8" />
+            <Stop offset="50%" stopColor="#ffffff" stopOpacity="0.4" />
+            <Stop offset="100%" stopColor="#ffffff" stopOpacity="0.0" />
+          </RadialGradient>
+          
+          {/* Shadow gradient */}
+          <RadialGradient id="bubbleShadow" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor="transparent" stopOpacity="0" />
+            <Stop offset="70%" stopColor="transparent" stopOpacity="0" />
+            <Stop offset="100%" stopColor="#000000" stopOpacity="0.1" />
+          </RadialGradient>
+        </Defs>
+        
+        {/* Shadow */}
+        <Circle
+          cx="20"
+          cy="22"
+          r="18"
+          fill="url(#bubbleShadow)"
+        />
+        
+        {/* Main bubble body */}
+        <Circle
+          cx="20"
+          cy="20"
+          r="16"
+          fill="url(#bubbleGradient)"
+          stroke={theme.colors.highlight}
+          strokeWidth="0.5"
+          strokeOpacity="0.3"
+        />
+        
+        {/* Top shine highlight */}
+        <Ellipse
+          cx="16"
+          cy="16"
+          rx="6"
+          ry="4"
+          fill="url(#bubbleShine)"
+        />
+        
+        {/* Secondary smaller shine */}
+        <Circle
+          cx="14"
+          cy="14"
+          r="2"
+          fill="#ffffff"
+          fillOpacity="0.6"
+        />
+      </Svg>
+    </Animated.View>
+  );
+};
+
 // Create a separate component for each second number with continuous fluid animation
 const SecondNumber: React.FC<{ 
   second: number; 
@@ -100,26 +214,21 @@ const SecondNumber: React.FC<{
   motionSensitivity: number;
 }> = ({ second, continuousTime, x, y, theme, animationQuality, motionSensitivity }) => {
   
-  // SMOOTH single second highlighting with proper transitions
+  // Only show active second - hide inactive seconds
   const animatedStyle = useAnimatedStyle(() => {
     // Calculate distance to this second (handles wraparound)
     const rawDiff = Math.abs(continuousTime.value - second);
     const circularDiff = Math.min(rawDiff, 60 - rawDiff);
     
-    // ALWAYS set base values first
-    let scale = 0.6;
-    let opacity = 0.0;
-    let easedProgress = 0.0;
+    // Hide all inactive seconds - only show current second
+    let opacity = 0.0; // Hide by default
+    let scale = 1.0;
     
-    // Only highlight seconds within 1.0 range (current second illuminated longer)
-    if (circularDiff <= 1.0) {
-      // Smooth transition from 1.0 distance to 0.0 distance
-      const proximity = 1 - (circularDiff / 1.0); // 1.0 at exact match, 0.0 at edges
-      
-      // Apply smooth easing for natural animation
-      easedProgress = proximity * proximity; // Quadratic easing
-      scale = 0.6 + easedProgress * 1.0; // 0.6 to 1.6
-      opacity = easedProgress; // 0.0 to 1.0
+    // Only show current second (encapsulated by bubble)
+    if (circularDiff <= 0.5) {
+      const proximity = 1 - (circularDiff / 0.5);
+      opacity = proximity; // 0.0 to 1.0 - fully visible only when active
+      scale = 1.0 + proximity * 0.1; // Subtle scale boost
     }
     
     return {
@@ -127,36 +236,25 @@ const SecondNumber: React.FC<{
         { translateX: x },
         { translateY: y },
         { scale },
-        { translateZ: easedProgress * 20 }, // 3D pop effect - comes toward viewer
       ],
       opacity,
-      elevation: easedProgress * 10, // Android shadow elevation for depth
-      shadowColor: theme.colors.highlight,
-      shadowOffset: { width: 0, height: easedProgress * 4 },
-      shadowOpacity: easedProgress * 0.3,
-      shadowRadius: easedProgress * 8,
     };
   });
 
-  // SMOOTH color transition - matches smooth highlighting
+  // Subtle color transition for encapsulated number
   const textAnimatedStyle = useAnimatedStyle(() => {
-    // Use same smooth logic as scaling
     const rawDiff = Math.abs(continuousTime.value - second);
     const circularDiff = Math.min(rawDiff, 60 - rawDiff);
     
-    // ALWAYS set default color first
-    let color = theme.colors.secondaryText;
+    let color = theme.colors.text;
     
-    // Only color seconds within 1.0 range (matches illumination duration)
-    if (circularDiff <= 1.0) {
-      const proximity = 1 - (circularDiff / 1.0);
-      const colorIntensity = proximity * proximity; // Same quadratic easing
-      
-      // Smooth color interpolation
+    // Enhance current second color (inside bubble)
+    if (circularDiff <= 0.5) {
+      const proximity = 1 - (circularDiff / 0.5);
       color = interpolateColor(
-        colorIntensity,
+        proximity,
         [0, 1],
-        [theme.colors.secondaryText, theme.colors.highlight]
+        [theme.colors.text, theme.colors.highlight]
       );
     }
     
@@ -238,6 +336,15 @@ export const CircularSeconds: React.FC<CircularSecondsProps> = ({ currentSecond 
         <RadiusLine continuousTime={continuousTime} theme={theme} />
       )}
       
+      {/* Water bubble that follows the current second */}
+      {settings.animationsEnabled && (
+        <WaterBubble 
+          continuousTime={continuousTime} 
+          theme={theme} 
+          secondPositions={secondPositions}
+        />
+      )}
+      
       {/* All second numbers with continuous flowing animation */}
       {settings.animationsEnabled ? (
         secondPositions.map(({ second, x, y }) => (
@@ -299,12 +406,24 @@ const styles = StyleSheet.create({
   radiusLineSvg: {
     position: 'absolute',
   },
+  bubbleContainer: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1, // Above numbers but below radius line
+  },
+  bubbleSvg: {
+    position: 'absolute',
+  },
   numberContainer: {
     position: 'absolute',
     width: 20, // Smaller container to prevent overlap
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 2, // Above bubble
   },
   number: {
     textAlign: 'center',
